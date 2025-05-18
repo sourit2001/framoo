@@ -1,0 +1,122 @@
+[
+    {
+      "id": "p001",
+      "name": "Classic Polaroid Frame",
+      "description": "A classic white border polaroid frame with vintage effect.",
+      "category": "template",
+      "url": "images/IMG_1096.jpg",
+      "thumbnail": "thumbnails/1096_副本.jpg",
+      "format": "jpg",
+      "dpi": 300,
+      "width_px": 709,
+      "height_px": 1085
+    },
+    {
+      "id": "p002",
+      "name": "Sunset Beach",
+      "description": "Beautiful sunset view at the tropical beach with palm trees silhouette.",
+      "category": "landscape",
+      "url": "images/p002.jpg",
+      "thumbnail": "thumbnails/p002.jpg",
+      "format": "jpg",
+      "dpi": 300,
+      "width_px": 709,
+      "height_px": 1085
+    },
+    {
+      "id": "p003",
+      "name": "Mountain View",
+      "description": "Breathtaking view of mountains with snow caps and clear blue sky.",
+      "category": "landscape",
+      "url": "images/p003.jpg",
+      "thumbnail": "thumbnails/p003.jpg",
+      "format": "jpg",
+      "dpi": 300,
+      "width_px": 709,
+      "height_px": 1085
+    },
+    {
+      "id": "p004",
+      "name": "City Lights",
+      "description": "Nighttime cityscape with bright lights reflecting in the water.",
+      "category": "landscape",
+      "url": "images/p004.jpg",
+      "thumbnail": "thumbnails/p004.jpg",
+      "format": "jpg",
+      "dpi": 300,
+      "width_px": 709,
+      "height_px": 1085
+    },
+    {
+      "id": "p005",
+      "name": "Vintage Portrait",
+      "description": "Artistic vintage style portrait with soft focus and warm tones.",
+      "category": "portrait",
+      "url": "images/p005.jpg",
+      "thumbnail": "thumbnails/p005.jpg",
+      "format": "jpg",
+      "dpi": 300,
+      "width_px": 709,
+      "height_px": 1085
+    },
+    {
+      "id": "p006",
+      "name": "Natural Portrait",
+      "description": "Natural light portrait in outdoor setting with bokeh background.",
+      "category": "portrait",
+      "url": "images/p006.jpg",
+      "thumbnail": "thumbnails/p006.jpg",
+      "format": "jpg",
+      "dpi": 300,
+      "width_px": 709,
+      "height_px": 1085
+    },
+    {
+      "id": "p007",
+      "name": "Artistic Frame",
+      "description": "Creative polaroid frame with artistic decorative elements.",
+      "category": "template",
+      "url": "images/p007.jpg",
+      "thumbnail": "thumbnails/p007.jpg",
+      "format": "png",
+      "dpi": 300,
+      "width_px": 709,
+      "height_px": 1085
+    },
+    {
+      "id": "p008",
+      "name": "Forest Path",
+      "description": "Mystical forest path with sunlight filtering through the trees.",
+      "category": "landscape",
+      "url": "images/p008.jpg",
+      "thumbnail": "thumbnails/p008.jpg",
+      "format": "jpg",
+      "dpi": 300,
+      "width_px": 709,
+      "height_px": 1085
+    },
+    {
+      "id": "p009",
+      "name": "Candid Portrait",
+      "description": "Authentic candid portrait capturing genuine emotion and expression.",
+      "category": "portrait",
+      "url": "images/p009.jpg",
+      "thumbnail": "thumbnails/p009.jpg",
+      "format": "jpg",
+      "dpi": 300,
+      "width_px": 709,
+      "height_px": 1085
+    },
+    {
+      "id": "p010",
+      "name": "Modern Frame",
+      "description": "Clean modern polaroid frame template with minimal design.",
+      "category": "template",
+      "url": "images/p010.jpg",
+      "thumbnail": "thumbnails/p010.jpg",
+      "format": "png",
+      "dpi": 300,
+      "width_px": 709,
+      "height_px": 1085
+    }
+  ]
