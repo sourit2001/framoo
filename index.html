@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Framoo</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 网站标题和导航栏 -->
+        <header>
+            <div class="logo">
+                <h1>Framoo</h1>
+            </div>
+            
+            <nav class="main-nav">
+                <div class="nav-container">
+                    <button class="category-btn active" data-category="all">
+                        <span class="icon"><i class="fas fa-th"></i></span>
+                        <span class="label" id="nav-all">所有风格</span>
+                    </button>
+                    <button class="category-btn" data-category="polaroid">
+                        <span class="icon"><i class="fas fa-camera-retro"></i></span>
+                        <span class="label" id="nav-polaroid">拍立得</span>
+                    </button>
+                    <button class="category-btn" data-category="magazine">
+                        <span class="icon"><i class="fas fa-book-open"></i></span>
+                        <span class="label" id="nav-magazine">杂志封面</span>
+                    </button>
+                    <button class="category-btn" data-category="frame">
+                        <span class="icon"><i class="fas fa-border-all"></i></span>
+                        <span class="label" id="nav-frame">边框</span>
+                    </button>
+                    <button class="category-btn" data-category="portrait">
+                        <span class="icon"><i class="fas fa-user"></i></span>
+                        <span class="label" id="nav-portrait">人物排版</span>
+                    </button>
+                </div>
+            </nav>
+            
+            <div class="language-selector">
+                <select id="language-select">
+                    <option value="en">English</option>
+                    <option value="zh">简体中文</option>
+                    <option value="zh-tw">繁體中文</option>
+                    <option value="ko">한국어</option>
+                    <option value="ja">日本語</option>
+                    <option value="fr">Français</option>
+                    <option value="de">Deutsch</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- 主内容区域 -->
+        <main>
+            <div id="gallery" class="gallery-grid"></div>
+        </main>
+        
+        <!-- 图片详情模态窗口 -->
+        <div id="image-modal" class="modal">
+            <div class="modal-content">
+                <button id="close-modal" class="close-btn"><i class="fas fa-times"></i></button>
+                
+                <div class="modal-image-container">
+                    <img id="modal-image" src="" alt="">
+                </div>
+                
+                <div class="modal-details">
+                    <h2 id="modal-title"></h2>
+                    <p id="modal-description"></p>
+                    
+                    <div class="image-metadata">
+                        <div class="metadata-item">
+                            <span class="metadata-label" id="label-format">Format:</span>
+                            <span id="modal-format"></span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label" id="label-dimensions">Dimensions:</span>
+                            <span id="modal-dimensions"></span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label" id="label-resolution">Resolution:</span>
+                            <span id="modal-resolution"></span>
+                        </div>
+                    </div>
+                    
+                    <button id="download-btn" class="download-button">Download</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
