@@ -1,81 +1,99 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import FormData from 'form-data'; // Use form-data for creating multipart/form-data streams
+import { Readable } from 'stream';
+import axios from 'axios';
 
-// Initialize Supabase client with service role key for admin-level access
-// Ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are in your .env.local
+// Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('Missing Supabase URL or Service Role Key for server-side client.');
-  // Potentially throw an error or handle this case more gracefully
-  // For now, we'll log and let requests fail if Supabase client isn't configured.
-}
-
-// Create a single Supabase client instance to be reused.
-const supabaseAdmin = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
-
-const BUCKET_NAME = 'fusion-images'; // IMPORTANT: Change this if your bucket name is different!
+// Get ClipDrop API Key
+const clipdropApiKey = process.env.CLIPDROP_API_KEY;
+const BUCKET_NAME = 'fusion-images';
 
 export async function POST(request) {
+  if (!clipdropApiKey) {
+    console.error('ClipDrop API key is not configured.');
+    return NextResponse.json({ error: 'Server configuration error: Missing ClipDrop API key.' }, { status: 500 });
+  }
+
   try {
-    const formData = await request.formData();
-    const subjectImage = formData.get('subjectImage');
-    const backgroundImage = formData.get('backgroundImage');
+    const requestFormData = await request.formData();
+    const subjectImageFile = requestFormData.get('subjectImage');
 
-    if (!subjectImage || !backgroundImage) {
-      return NextResponse.json({ error: 'Missing subjectImage or backgroundImage' }, { status: 400 });
+    if (!subjectImageFile) {
+      return NextResponse.json({ error: 'Subject image is required.' }, { status: 400 });
     }
 
-    // 在这里，你可以添加将文件保存到 Supabase Storage 或其他地方的逻辑
-    // 以及调用 AI 模型进行图像融合的逻辑
+    // 1. Call ClipDrop API directly with the image file
+    const clipdropFormData = new FormData(); // From 'form-data' library
+    // Convert the File object to a Buffer, then to a ReadableStream for form-data library
+    const imageArrayBuffer = await subjectImageFile.arrayBuffer();
+    const imageBuffer = Buffer.from(imageArrayBuffer);
+    const imageStream = Readable.from(imageBuffer);
 
-    if (!supabaseAdmin) {
-      console.error('Supabase admin client is not initialized. Check environment variables.');
-      return NextResponse.json({ error: 'Server configuration error for Supabase.' }, { status: 500 });
-    }
-
-    console.log('Received subject image:', subjectImage.name, subjectImage.size, subjectImage.type);
-    console.log('Received background image:', backgroundImage.name, backgroundImage.size, backgroundImage.type);
-
-    // Helper function to upload a single file
-    const uploadFile = async (file, fileType) => {
-      const fileName = `${fileType}-${Date.now()}-${file.name}`;
-      const filePath = `public/${fileName}`; // Example path structure within the bucket
-
-      const { data, error } = await supabaseAdmin.storage
-        .from(BUCKET_NAME)
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false, // true to overwrite existing files, false to fail if file exists
-        });
-
-      if (error) {
-        console.error(`Error uploading ${fileType} image to Supabase Storage:`, error);
-        throw new Error(`Failed to upload ${fileType} image: ${error.message}`);
-      }
-
-      // Get public URL for the uploaded file
-      const { data: publicUrlData } = supabaseAdmin.storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(filePath);
-      
-      console.log(`Uploaded ${fileType} to:`, publicUrlData.publicUrl);
-      return { path: data.path, publicUrl: publicUrlData.publicUrl, name: file.name, size: file.size, type: file.type };
-    };
-
-    // Upload both images
-    const subjectImageData = await uploadFile(subjectImage, 'subject');
-    const backgroundImageData = await uploadFile(backgroundImage, 'background');
-
-    // Return a success response with the storage paths or public URLs
-    return NextResponse.json({
-      message: 'Images received and uploaded to Supabase Storage successfully.',
-      subjectImage: subjectImageData,
-      backgroundImage: backgroundImageData,
+    // Append the Stream, providing the filename, contentType, and knownLength in an options object
+    clipdropFormData.append('image_file', imageStream, {
+      filename: subjectImageFile.name || 'image.jpg',
+      contentType: subjectImageFile.type,
+      knownLength: imageBuffer.length
     });
+
+    console.log('Sending image file to ClipDrop:', subjectImageFile.name, subjectImageFile.type, subjectImageFile.size);
+
+    // 使用 axios 发送 form-data，解决 fetch/undici 不能正确处理 form-data 的问题
+    let clipdropResponse;
+    try {
+      clipdropResponse = await axios.post(
+        'https://clipdrop-api.co/remove-background/v1',
+        clipdropFormData,
+        {
+          headers: {
+            'x-api-key': clipdropApiKey,
+            ...clipdropFormData.getHeaders(),
+          },
+          responseType: 'arraybuffer', // 返回 Buffer
+        }
+      );
+    } catch (error) {
+      const status = error.response?.status || 500;
+      const errorBody = error.response?.data?.toString() || error.message;
+      console.error('ClipDrop API error:', status, errorBody);
+      throw new Error(`ClipDrop API failed: ${errorBody}`);
+    }
+
+    // 2. 获取 ClipDrop 返回的透明图像 Buffer
+    const transparentImageBuffer = Buffer.from(clipdropResponse.data);
+    console.log('Received transparent image from ClipDrop, size:', transparentImageBuffer.length);
+
+    // 3. Upload the new transparent image to Supabase
+    const transparentFileName = `subject-transparent-${Date.now()}.png`;
+    const { error: transparentUploadError } = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .upload(transparentFileName, transparentImageBuffer, {
+        contentType: 'image/png',
+        upsert: false,
+      });
+
+    if (transparentUploadError) {
+      console.error('Error uploading transparent image:', transparentUploadError);
+      throw new Error('Failed to upload transparent image.');
+    }
+
+    // 5. Get the public URL for the final transparent image
+    const { data: { publicUrl: transparentImageUrl } } = supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(transparentFileName);
+
+    console.log('Transparent image uploaded, public URL:', transparentImageUrl);
+
+    // 5. Return the URL to the frontend
+    return NextResponse.json({ transparentImageUrl });
+
   } catch (error) {
-    console.error('Error processing image upload:', error);
-    return NextResponse.json({ error: 'Error processing request', details: error.message }, { status: 500 });
+    console.error('Error in /api/fuse:', error);
+    return NextResponse.json({ error: 'An unexpected error occurred.', details: error.message }, { status: 500 });
   }
 }
