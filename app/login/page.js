@@ -1,24 +1,40 @@
-// app/login/page.js
-'use client' // This directive is necessary for using client-side hooks like useEffect and useRouter
+'use client';
 
-import { Auth } from '@supabase/auth-ui-react'
-import { ThemeSupa } from '@supabase/auth-ui-shared'
-import { supabase } from '../../lib/supabaseClient' // Adjusted path to lib folder
-import { useRouter } from 'next/navigation' // Use 'next/navigation' for App Router
-import { useEffect, useState } from 'react'
+import { Auth } from '@supabase/auth-ui-react';
+import { ThemeSupa } from '@supabase/auth-ui-shared';
+import { createSupabaseBrowserClient } from '../../lib/supabaseClient'; // Correctly import the function
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function LoginPage() {
-  const router = useRouter()
+  const router = useRouter();
+  // Call the function to get a Supabase client instance
+  const supabase = createSupabaseBrowserClient(); 
   const [sessionChecked, setSessionChecked] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Added for better loading state
 
   useEffect(() => {
-    // Check initial session state on component mount
+    // Ensure supabase client is available before proceeding
+    if (!supabase) {
+      console.error("Supabase client is not available in LoginPage.");
+      setIsLoading(false);
+      setSessionChecked(true); // Allow UI to render an error or fallback
+      return;
+    }
+
     async function checkInitialSession() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        router.push('/');
-      } else {
-        setSessionChecked(true); // Only allow rendering Auth UI if no active session
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          router.push('/');
+        } else {
+          setSessionChecked(true);
+        }
+      } catch (error) {
+        console.error("Error checking initial session:", error);
+        setSessionChecked(true); // Allow UI to render even if there's an error
+      } finally {
+        setIsLoading(false);
       }
     }
     checkInitialSession();
@@ -27,47 +43,38 @@ export default function LoginPage() {
       async (event, session) => {
         if (session) {
           router.push('/');
-        } else {
-          // Handle logout or session expiry if needed
-          // if (router.pathname !== '/login') { // Avoid redirect loops
-          //   router.push('/login');
-          // }
         }
       }
     );
 
+    // Cleanup function
     return () => {
       if (authListener && authListener.subscription) {
         authListener.subscription.unsubscribe();
       } else if (authListener && typeof authListener.unsubscribe === 'function') {
+        // Fallback for older versions or different structures
         authListener.unsubscribe();
       }
     };
-  }, [router]);
+  }, [router, supabase]); // Add supabase to dependency array
 
-  if (!sessionChecked) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-        <p>Loading...</p>
-      </div>
-    );
+  if (isLoading || !sessionChecked) {
+    return <div>Loading...</div>;
+  }
+
+  // Ensure supabase client is available before rendering Auth UI
+  if (!supabase) {
+    return <div>Error: Supabase client could not be initialized. Please check console.</div>;
   }
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '20px', background: '#f0f2f5' }}>
-      <div style={{ width: '100%', maxWidth: '420px', padding: '30px', border: '1px solid #d9d9d9', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', background: 'white' }}>
-        <h2 style={{ textAlign: 'center', marginBottom: '24px', fontSize: '24px', fontWeight: '500', color: '#333' }}>
-          Sign In
-        </h2>
-        <Auth
-          supabaseClient={supabase}
-          appearance={{ theme: ThemeSupa }}
-          providers={['google', 'github']} // Example social providers
-          theme="default"
-          socialLayout="horizontal"
-          showLinks={true}
-        />
-      </div>
+    <div style={{ maxWidth: '420px', margin: '96px auto' }}>
+      <Auth 
+        supabaseClient={supabase} 
+        appearance={{ theme: ThemeSupa }} 
+        providers={['google', 'github']} 
+        redirectTo={typeof window !== 'undefined' ? window.location.origin : ''} // Ensure redirectTo is a full URL for OAuth
+      />
     </div>
   );
 }
