@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+
+console.log('STABILITY_API_KEY:', process.env.STABILITY_API_KEY);
 import { createClient } from '@supabase/supabase-js';
 import FormData from 'form-data';
 import axios from 'axios';
