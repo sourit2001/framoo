@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import FormData from 'form-data';
-import { Readable } from 'stream';
+
 import axios from 'axios';
-import Color from 'colorjs.io'; // Lab color transfer
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
