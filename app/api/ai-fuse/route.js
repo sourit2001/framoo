@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-const sharp = require('sharp');
+import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -15,7 +15,9 @@ import { v4 as uuidv4 } from 'uuid';
  * @return  Array           The HSL representation
  */
 function rgbToHsl(r, g, b) {
-  r /= 255, g /= 255, b /= 255;
+  r /= 255;
+  g /= 255;
+  b /= 255;
 
   var max = Math.max(r, g, b), min = Math.min(r, g, b);
   var h, s, l = (max + min) / 2;
