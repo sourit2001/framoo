@@ -41,13 +41,18 @@ function rgbToHsl(r, g, b) {
 }
 
 // 初始化 Supabase 客户端
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY 
+  ? createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+  : null;
 
 // Helper: 上传图片 buffer 到 Supabase
 async function uploadImageToSupabase(buffer, fileName) {
+  if (!supabase) {
+    throw new Error('Supabase client not configured. Please set environment variables.');
+  }
   const { error } = await supabase.storage
     .from('fusion-images')
     .upload(fileName, buffer, { contentType: 'image/png' });
