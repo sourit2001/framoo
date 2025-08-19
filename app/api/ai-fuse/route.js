@@ -67,19 +67,98 @@ async function uploadImageToSupabase(buffer, fileName) {
 
 export async function POST(req) {
   try {
-    const { action, prompt, mattingUrl, backgroundUrl } = await req.json();
+    // 检查请求类型
+    const contentType = req.headers.get('content-type') || '';
+    let action, prompt, mattingBuffer, backgroundUrl, formData;
+    
+    if (contentType.includes('multipart/form-data')) {
+      // 处理 FormData 请求
+      formData = await req.formData();
+      action = formData.get('action');
+      prompt = formData.get('prompt');
+      const mattingFile = formData.get('mattingFile');
+      backgroundUrl = formData.get('backgroundUrl');
+      
+      if (mattingFile) {
+        mattingBuffer = Buffer.from(await mattingFile.arrayBuffer());
+      }
+    } else {
+      // 处理 JSON 请求
+      const { action: jsonAction, prompt: jsonPrompt, mattingUrl, backgroundUrl: jsonBackgroundUrl } = await req.json();
+      action = jsonAction;
+      prompt = jsonPrompt;
+      backgroundUrl = jsonBackgroundUrl;
+      
+      if (mattingUrl) {
+        const mattingResponse = await fetch(mattingUrl);
+        mattingBuffer = Buffer.from(await mattingResponse.arrayBuffer());
+      }
+    }
 
-    // --- Action 1: 生成背景图片 ---
+    // --- Action 1: 抠图处理 (Stability AI) ---
+    if (action === "remove-background") {
+      const imageFile = formData?.get('imageFile');
+      if (!imageFile) {
+        return NextResponse.json({ error: '缺少图片文件' }, { status: 400 });
+      }
+
+      const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
+      if (!STABILITY_API_KEY) {
+        return NextResponse.json({ error: 'Stability API key not configured' }, { status: 500 });
+      }
+
+      try {
+        // 准备 FormData 发送给 Stability AI
+        const stabilityFormData = new FormData();
+        const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
+        const blob = new Blob([imageBuffer], { type: imageFile.type });
+        stabilityFormData.append('image', blob);
+        stabilityFormData.append('output_format', 'png');
+
+        // 调用 Stability AI 抠图 API
+        const response = await fetch('https://api.stability.ai/v2beta/stable-image/edit/remove-background', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${STABILITY_API_KEY}`,
+            'Accept': 'image/*'
+          },
+          body: stabilityFormData
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Stability AI 抠图失败:', errorText);
+          return NextResponse.json({ error: `抠图失败: ${response.status}` }, { status: 502 });
+        }
+
+        // 获取抠图结果
+        const mattingImageBuffer = Buffer.from(await response.arrayBuffer());
+        
+        // 上传到 Supabase 存储，使用唯一文件名
+        const mattingFileName = `${uuidv4()}-matting.png`;
+        const mattingUrl = await uploadImageToSupabase(mattingImageBuffer, mattingFileName);
+        
+        return NextResponse.json({ 
+          success: true, 
+          mattingUrl,
+          message: '抠图处理完成'
+        });
+        
+      } catch (error) {
+        console.error('Stability AI 抠图错误:', error);
+        return NextResponse.json({ error: `抠图处理失败: ${error.message}` }, { status: 500 });
+      }
+    }
+
+    // --- Action 2: 生成背景图片 ---
     if (action === "generate-background") {
-      if (!prompt || !mattingUrl) {
-        return NextResponse.json({ error: '缺少prompt或抠图URL参数' }, { status: 400 });
+      if (!prompt || !mattingBuffer) {
+        return NextResponse.json({ error: '缺少prompt或抠图文件参数' }, { status: 400 });
       }
 
       // --- 智能光影分析 --- 
       let lightAndColorPrompt = '';
       try {
-        const mattingResponse = await fetch(mattingUrl);
-        const mattingBuffer = Buffer.from(await mattingResponse.arrayBuffer());
         const stats = await sharp(mattingBuffer).stats();
         const { r, g, b } = stats.dominant;
         const [h, s, l] = rgbToHsl(r, g, b);
@@ -132,12 +211,7 @@ Your expanded, detailed prompt in English:`
         return NextResponse.json({ error: orData?.error?.message || 'AI prompt generation failed' }, { status: 502 });
       }
 
-      // 从抠图URL获取图片尺寸
-      const mattingResponse = await fetch(mattingUrl);
-      if (!mattingResponse.ok) {
-        return NextResponse.json({ error: "无法下载抠图以获取尺寸" }, { status: 500 });
-      }
-      const mattingBuffer = Buffer.from(await mattingResponse.arrayBuffer());
+      // 获取抠图尺寸（mattingBuffer已在前面获取）
       const mattingMeta = await sharp(mattingBuffer).metadata();
 
       const roundTo64 = (n) => Math.max(64, Math.round(n / 64) * 64);
@@ -179,35 +253,69 @@ Your expanded, detailed prompt in English:`
         return NextResponse.json({ error: '背景生成任务提交失败: ' + err }, { status: 502 });
       }
       const taskData = await createTaskRes.json();
-      const taskId = taskData?.data?.task_id;
+      console.log('PIAPI 创建任务响应:', taskData);
+      
+      // 根据实际API响应结构调整数据访问路径
+      const taskId = taskData?.data?.task_id || taskData?.task_id;
       if (!taskId) {
+        console.error('未能获取任务ID:', taskData);
         return NextResponse.json({ error: '未获取到生成任务ID' }, { status: 502 });
       }
 
       let imageUrl = null;
-      for (let i = 0; i < 30; i++) {
-        await new Promise(res => setTimeout(res, 2000));
+      console.log(`开始轮询PIAPI任务: ${taskId}`);
+      
+      // 增加轮询次数和间隔，给图像生成更多时间
+      for (let i = 0; i < 60; i++) { // 增加到60次
+        await new Promise(res => setTimeout(res, 3000)); // 增加到3秒间隔
+        
         const pollRes = await fetch(`https://api.piapi.ai/api/v1/task/${taskId}`, {
           headers: { 'X-API-Key': piapiApiKey }
         });
-        if (!pollRes.ok) continue;
+        
+        if (!pollRes.ok) {
+          console.log(`轮询第${i+1}次失败: ${pollRes.status}`);
+          continue;
+        }
+        
         const pollData = await pollRes.json();
-        if (pollData?.data?.status === 'completed' && pollData?.data?.output?.image_url) {
-          imageUrl = pollData.data.output.image_url;
-          break;
-        } else if (pollData?.data?.status === 'failed') {
-          return NextResponse.json({ error: '背景生成失败: ' + (pollData?.data?.error?.message || '未知错误') }, { status: 502 });
+        console.log(`轮询第${i+1}次响应:`, pollData);
+        
+        // 根据实际API响应结构调整数据访问路径
+        const status = pollData?.data?.status || pollData?.status;
+        console.log(`轮询第${i+1}次, 任务状态: ${status}`);
+        
+        if (status === 'completed') {
+          // 尝试两种可能的数据结构
+          const outputImageUrl = pollData?.data?.output?.image_url || pollData?.output?.image_url;
+          if (outputImageUrl) {
+            imageUrl = outputImageUrl;
+            console.log(`任务完成，图片URL: ${imageUrl}`);
+            break;
+          } else {
+            console.log('任务完成但未找到图片URL');
+          }
+        } else if (status === 'failed') {
+          const errorInfo = pollData?.data?.error || pollData?.error;
+          console.error('任务失败:', errorInfo);
+          return NextResponse.json({ error: '背景生成失败: ' + (errorInfo?.message || '未知错误') }, { status: 502 });
         }
       }
+      
       if (!imageUrl) {
-        return NextResponse.json({ error: '背景生成超时，请稍后重试' }, { status: 504 });
+        console.error(`任务超时: ${taskId}`);
+        return NextResponse.json({ error: '背景生成超时（已等待3分钟），请稍后重试' }, { status: 504 });
       }
 
       const imgRes = await fetch(imageUrl);
       const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
       const bgFileName = `${uuidv4()}-background.png`;
       const publicUrl = await uploadImageToSupabase(imgBuffer, bgFileName);
-      return NextResponse.json({ backgrounds: [publicUrl] });
+      return NextResponse.json({ 
+        success: true, 
+        backgroundUrl: publicUrl,
+        message: '背景生成完成'
+      });
     }
 
     // --- Action 2: 融合图片 --- 

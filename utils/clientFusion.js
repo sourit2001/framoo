@@ -9,6 +9,110 @@
  * @param {string} imageUrl - 图片URL
  * @returns {Promise<{canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, imageData: ImageData}>}
  */
+
+/**
+ * 直接绘制到给定画布的实时预览版本（无 DataURL 转码）
+ * @param {string} foregroundUrl - 前景图片URL
+ * @param {string} backgroundUrl - 背景图片URL
+ * @param {Object} options - 融合选项（与 fuseImages 一致）
+ * @param {HTMLCanvasElement} targetCanvas - 目标画布
+ * @returns {Promise<HTMLCanvasElement>} 返回传入的 targetCanvas
+ */
+export async function fuseImagesToCanvas(foregroundUrl, backgroundUrl, options = {}, targetCanvas) {
+  if (!targetCanvas) throw new Error('需要提供 targetCanvas');
+  try {
+    const [fgData, bgData] = await Promise.all([
+      loadImageToCanvas(foregroundUrl),
+      loadImageToCanvas(backgroundUrl)
+    ]);
+
+    const canvasWidth = bgData.canvas.width;
+    const canvasHeight = bgData.canvas.height;
+    targetCanvas.width = canvasWidth;
+    targetCanvas.height = canvasHeight;
+    // 保持预览不拉伸：设置 CSS 宽高与纵横比
+    if (targetCanvas.style) {
+      targetCanvas.style.aspectRatio = `${canvasWidth} / ${canvasHeight}`;
+      targetCanvas.style.width = '100%';
+      targetCanvas.style.height = 'auto';
+    }
+    const finalCtx = targetCanvas.getContext('2d');
+
+    // 前景可见区域与缩放、定位（底部对齐）
+    const bounds = getOpaqueBounds(fgData.canvas);
+    const scaleByWidth = canvasWidth / bounds.width;
+    const scaleByHeight = canvasHeight / bounds.height;
+    const finalScale = Math.min(scaleByWidth, scaleByHeight, 1.0);
+    const fgDisplayWidth = Math.round(bounds.width * finalScale);
+    const fgDisplayHeight = Math.round(bounds.height * finalScale);
+    const fgX = Math.round((canvasWidth - fgDisplayWidth) / 2);
+    const fgY = canvasHeight - fgDisplayHeight;
+
+    // 背景
+    finalCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+    finalCtx.drawImage(bgData.canvas, 0, 0, canvasWidth, canvasHeight);
+
+    // 前景预处理：打光与色彩转移
+    const lt = options.lighting;
+    let processedImageData = fgData.imageData;
+    const ltDisabled = lt === false || (typeof lt === 'object' && lt.enabled === false);
+    if (!ltDisabled) {
+      const ltOpts = typeof lt === 'object' ? lt : {};
+      // 地面影子
+      if (ltOpts.ground && ltOpts.ground.enabled !== false) {
+        const g = ltOpts.ground;
+        const opacity = typeof g.opacity === 'number' ? Math.max(0, Math.min(1, g.opacity)) : 0.25;
+        const widthScale = typeof g.widthScale === 'number' ? g.widthScale : 0.45;
+        const heightPx = typeof g.heightPx === 'number' ? g.heightPx : Math.max(8, Math.round(fgDisplayHeight * 0.05));
+        const offsetYPx = typeof g.offsetY === 'number' ? g.offsetY : 4;
+
+        const cx = fgX + fgDisplayWidth / 2;
+        const cy = fgY + fgDisplayHeight + offsetYPx;
+        const rx = Math.max(4, fgDisplayWidth * widthScale);
+        const ry = Math.max(2, heightPx);
+
+        finalCtx.save();
+        finalCtx.translate(cx, cy);
+        finalCtx.scale(rx, ry);
+        const grad = finalCtx.createRadialGradient(0, 0, 0, 0, 0, 1);
+        grad.addColorStop(0, `rgba(0,0,0,${opacity})`);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        finalCtx.fillStyle = grad;
+        finalCtx.beginPath();
+        finalCtx.arc(0, 0, 1, 0, Math.PI * 2);
+        finalCtx.fill();
+        finalCtx.restore();
+      }
+
+      processedImageData = applyDirectionalLighting(processedImageData, ltOpts);
+    }
+
+    const ct = options.colorTransfer;
+    const ctDisabled = ct === false || (typeof ct === 'object' && ct.enabled === false);
+    if (!ctDisabled) {
+      const ctOpts = typeof ct === 'object' ? ct : {};
+      processedImageData = applyColorTransfer(processedImageData, bgData.imageData, ctOpts);
+    }
+
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCanvas.width = fgData.canvas.width;
+    tempCanvas.height = fgData.canvas.height;
+    tempCtx.putImageData(processedImageData, 0, 0);
+
+    finalCtx.globalCompositeOperation = 'source-over';
+    finalCtx.drawImage(
+      tempCanvas,
+      bounds.x, bounds.y, bounds.width, bounds.height,
+      fgX, fgY, fgDisplayWidth, fgDisplayHeight
+    );
+
+    return targetCanvas;
+  } catch (error) {
+    console.error('❌ 预览绘制失败:', error);
+    throw error;
+  }
+}
 export async function loadImageToCanvas(imageUrl) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -92,10 +196,10 @@ export function calculateImageStats(imageData) {
 export function applyDirectionalLighting(sourceData, opts = {}) {
   const {
     direction = 'left-top',
-    intensity = 0.25,
+    intensity = 0.6,
     softness = 0.75,
     // 侧向阴影：与打光方向相反一侧适度压暗，增强立体感
-    shadowIntensity = 0.0,
+    shadowIntensity = 0.3,
   } = opts;
 
   const w = sourceData.width;
