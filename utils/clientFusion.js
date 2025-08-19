@@ -202,6 +202,11 @@ export function applyDirectionalLighting(sourceData, opts = {}) {
     shadowIntensity = 0.3,
   } = opts;
 
+  // 将 0-10 范围的参数映射到有效范围
+  const intensityNorm = Math.max(0, intensity / 10); // 0-10 → 0-1
+  const softnessNorm = Math.max(0, Math.min(1, softness / 10)); // 0-10 → 0-1
+  const shadowNorm = Math.max(0, shadowIntensity / 10); // 0-10 → 0-1
+
   const w = sourceData.width;
   const h = sourceData.height;
   const data = new Uint8ClampedArray(sourceData.data); // 拷贝
@@ -215,7 +220,13 @@ export function applyDirectionalLighting(sourceData, opts = {}) {
 
   // 软化半径像素尺度
   const maxDim = Math.max(w, h);
-  const radius = Math.max(1, softness * maxDim);
+  // 使用归一化后的参数，应用非线性映射增强敏感度
+  const intensityEff = Math.pow(intensityNorm, 0.6) * 2.0; // 放大到 0-2 范围
+  // 软化半径：基础随 softness 变化；使用非线性以提升敏感度
+  const softnessEff = Math.pow(softnessNorm, 0.7);
+  const baseRadius = Math.max(1, softnessEff * maxDim);
+  const radiusScale = intensityEff > 1 ? Math.max(0.6, 1 - 0.25 * (intensityEff - 1)) : 1;
+  const radius = Math.max(1, baseRadius * radiusScale);
   const radiusOpp = radius; // 使用同一软化尺度
 
   for (let y = 0; y < h; y++) {
@@ -231,16 +242,19 @@ export function applyDirectionalLighting(sourceData, opts = {}) {
 
       // 归一化并根据软化半径平滑
       const d = Math.min(1, dist / radius);
-      // 亮度系数：角落最亮，向远处衰减到 1
-      let gain = 1 + intensity * (1 - d);
+      // 更强的非线性衰减，中心更亮、远处更暗
+      const t = 1 - d;
+      const fall = Math.pow(t, 1.35);
+      // 亮度系数：提高总增益系数，增强可感知差异
+      let gain = 1 + 1.2 * intensityEff * fall;
 
       if (shadowIntensity > 0) {
         const sx = x - shadowCornerX;
         const sy = y - shadowCornerY;
         const sdist = Math.hypot(sx, sy);
         const sd = Math.min(1, sdist / radiusOpp);
-        // 阴影系数：对角处最暗，向光源方向逐渐减弱
-        const shadowMul = 1 - shadowIntensity * (1 - sd);
+        // 阴影系数：采用更强的曲线，增大对比
+        const shadowMul = 1 - Math.min(0.9, shadowNorm * 2.0 * Math.pow(1 - sd, 1.2));
         gain *= Math.max(0, shadowMul);
       }
 
@@ -267,9 +281,24 @@ export function applyDirectionalLighting(sourceData, opts = {}) {
 export function applyColorTransfer(sourceData, targetData, opts = {}) {
   const {
     strength = 0.6,
-    stdClamp = [0.85, 1.15],
-    preserveHighlights = true,
+    // 接受 0~10 范围的滑杆输入（仅下限）
+    stdClamp = [0.7],
   } = opts;
+  
+  // 将 0-10 范围的参数映射到有效范围
+  const strengthNorm = Math.max(0, strength / 10); // 0-10 → 0-1
+  const clampNorm = Math.max(0, Math.min(1, (stdClamp[0] || 0.7) / 10)); // 0-10 → 0-1
+  // 提升敏感度：
+  // - strength 使用线性映射，确保全范围有效
+  const strengthEff = strengthNorm * 5.0; // 线性放大到 0-5 范围，确保高值有效
+  // - stdClamp 使用归一化输入映射到有效范围：
+  //   下限: 0→0.3, 1→1.2；上限固定为2.0
+  const lerp = (a, b, t) => a + (b - a) * t;
+  let loEff = lerp(0.3, 1.2, clampNorm);
+  let hiEff = 2.0; // 固定上限，允许更大对比度变化
+  // 轻度敏感度增强
+  const amp = 1.2;
+  loEff = 1 - (1 - loEff) * amp;
   const sourceStats = calculateImageStats(sourceData);
   const targetStats = calculateImageStats(targetData);
   
@@ -298,25 +327,16 @@ export function applyColorTransfer(sourceData, targetData, opts = {}) {
       };
       // 限制对比度缩放比例，避免过度“冲/灰”
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-      const cr = clamp(stdRatio.r, stdClamp[0], stdClamp[1]);
-      const cg = clamp(stdRatio.g, stdClamp[0], stdClamp[1]);
-      const cb = clamp(stdRatio.b, stdClamp[0], stdClamp[1]);
+      const cr = clamp(stdRatio.r, loEff, hiEff);
+      const cg = clamp(stdRatio.g, loEff, hiEff);
+      const cb = clamp(stdRatio.b, loEff, hiEff);
       
       const newR = (r - sourceStats.mean.r) * cr + targetStats.mean.r;
       const newG = (g - sourceStats.mean.g) * cg + targetStats.mean.g;
       const newB = (b - sourceStats.mean.b) * cb + targetStats.mean.b;
 
       // 对高光区域减弱转移强度，避免白衬衫被“染色”
-      let atten = 1.0;
-      if (preserveHighlights) {
-        const avg = (r + g + b) / 3;
-        if (avg > 235) {
-          atten = 0.3; // 非常亮的区域大幅降低
-        } else if (avg > 210) {
-          atten = 0.6; // 高亮区域适度降低
-        }
-      }
-      const mix = Math.max(0, Math.min(1, strength * atten));
+      const mix = Math.max(0, strengthEff); // 移除上限和高光保护，允许强烈色彩转移
       const outR = r * (1 - mix) + newR * mix;
       const outG = g * (1 - mix) + newG * mix;
       const outB = b * (1 - mix) + newB * mix;

@@ -106,8 +106,7 @@ export default function HomePage() {
           colorTransfer: ctEnabled ? {
             enabled: true,
             strength: ctStrength,
-            stdClamp: [ctStdLow, ctStdHigh],
-            preserveHighlights: ctPreserveHighlights,
+            stdClamp: [ctStdLow],
           } : false,
         }, canvas);
       } catch (error) {
@@ -215,8 +214,7 @@ export default function HomePage() {
         colorTransfer: ctEnabled ? {
           enabled: true,
           strength: ctStrength,
-          stdClamp: [ctStdLow, ctStdHigh],
-          preserveHighlights: ctPreserveHighlights,
+          stdClamp: [ctStdLow],
         } : false,
       });
       
@@ -457,7 +455,7 @@ export default function HomePage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', alignItems: 'start' }}>
               {/* 右侧: 参数控制（在视觉上放右侧，通过 order 控制） */}
-              <div style={{ order: 2, position: 'sticky', top: '12px', maxHeight: '70vh', overflow: 'auto', marginTop: thumbOffset + 16 }}>
+              <div style={{ order: 2, position: 'sticky', top: '12px', maxHeight: '70vh', overflow: 'auto' }}>
                 {/* 光影参数 */}
                 <div style={{ marginBottom: '24px', padding: '16px', border: '1px solid #e5e7eb', borderRadius: '6px' }}>
                   <h3 style={{ fontSize: '16px', fontWeight: '500', marginBottom: '16px' }}>光影设置</h3>
@@ -472,17 +470,17 @@ export default function HomePage() {
                   
                   <div style={{ marginBottom: '12px' }}>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>光影强度: {ltIntensity}</label>
-                    <input type="range" min="0" max="2" step="0.1" value={ltIntensity} onChange={(e) => setLtIntensity(parseFloat(e.target.value))} style={{ width: '100%' }} />
+                    <input type="range" min="0" max="10" step="0.1" value={ltIntensity} onChange={(e) => setLtIntensity(parseFloat(e.target.value))} style={{ width: '100%' }} />
                   </div>
                   
                   <div style={{ marginBottom: '12px' }}>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>柔和度: {ltSoftness}</label>
-                    <input type="range" min="0" max="1" step="0.05" value={ltSoftness} onChange={(e) => setLtSoftness(parseFloat(e.target.value))} style={{ width: '100%' }} />
+                    <input type="range" min="0" max="10" step="0.1" value={ltSoftness} onChange={(e) => setLtSoftness(parseFloat(e.target.value))} style={{ width: '100%' }} />
                   </div>
                   
                   <div style={{ marginBottom: '12px' }}>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>阴影强度: {ltShadowIntensity}</label>
-                    <input type="range" min="0" max="1.5" step="0.1" value={ltShadowIntensity} onChange={(e) => setLtShadowIntensity(parseFloat(e.target.value))} style={{ width: '100%' }} />
+                    <input type="range" min="0" max="10" step="0.1" value={ltShadowIntensity} onChange={(e) => setLtShadowIntensity(parseFloat(e.target.value))} style={{ width: '100%' }} />
                   </div>
                 </div>
                 
@@ -492,23 +490,14 @@ export default function HomePage() {
                   
                   <div style={{ marginBottom: '12px' }}>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>色彩强度: {ctStrength}</label>
-                    <input type="range" min="0" max="2" step="0.1" value={ctStrength} onChange={(e) => setCtStrength(parseFloat(e.target.value))} style={{ width: '100%' }} />
+                    <input type="range" min="0" max="10" step="0.1" value={ctStrength} onChange={(e) => setCtStrength(parseFloat(e.target.value))} style={{ width: '100%' }} />
                   </div>
                   <div style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>对比度夹取下限: {ctStdLow.toFixed(2)}</label>
-                    <input type="range" min="0.5" max="1.5" step="0.05" value={ctStdLow} onChange={(e) => setCtStdLow(parseFloat(e.target.value))} style={{ width: '100%' }} />
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>对比度: {ctStdLow.toFixed(2)}</label>
+                    <input type="range" min="0" max="10" step="0.1" value={ctStdLow} onChange={(e) => setCtStdLow(parseFloat(e.target.value))} style={{ width: '100%' }} />
                   </div>
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>对比度夹取上限: {ctStdHigh.toFixed(2)}</label>
-                    <input type="range" min="0.8" max="1.8" step="0.05" value={ctStdHigh} onChange={(e) => setCtStdHigh(parseFloat(e.target.value))} style={{ width: '100%' }} />
-                  </div>
-                  
-                  <div style={{ marginBottom: '12px' }}>
-                    <label>
-                      <input type="checkbox" checked={ctPreserveHighlights} onChange={(e) => setCtPreserveHighlights(e.target.checked)} style={{ marginRight: '8px' }} />
-                      保护高光
-                    </label>
-                  </div>
+
+
                 </div>
                 
                 <button
